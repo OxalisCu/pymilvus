@@ -199,6 +199,26 @@ class BulkWriter:
                 self._throw(f"The field '{field.name}' is missed in the row")
 
             dtype = DataType(field.dtype)
+            
+            # set default value if the field is null
+            if field.nullable and row[field.name] is None:
+                if field.default_value is not None:
+                    row[field.name] = field.default_value
+                else:
+                    if dtype in {
+                        DataType.BINARY_VECTOR,
+                        DataType.FLOAT_VECTOR,
+                        DataType.FLOAT16_VECTOR,
+                        DataType.BFLOAT16_VECTOR,
+                        DataType.SPARSE_FLOAT_VECTOR,
+                    }:
+                        # vector field should not be null
+                        self._throw(f"Field '{field.name}' should not be null")
+                    else:
+                        # skip field check if the default_value is None
+                        continue
+
+
             if dtype in {
                 DataType.BINARY_VECTOR,
                 DataType.FLOAT_VECTOR,

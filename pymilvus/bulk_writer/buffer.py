@@ -289,7 +289,7 @@ class Buffer:
 
     def _persist_csv(self, local_path: str, **kwargs):
         sep = self._config.get("sep", ",")
-        # nullkey is not supported in csv now
+        nullkey = self._config.get("nullkey", "")
 
         header = list(self._buffer.keys())
         data = pd.DataFrame(columns=header)
@@ -307,8 +307,6 @@ class Buffer:
             #    2. or convert arr into a string using json.dumps(arr) first and then add it to df
             # I choose method 2 here
             if field_schema.dtype in {
-                DataType.JSON,
-                DataType.ARRAY,
                 DataType.SPARSE_FLOAT_VECTOR,
                 DataType.BINARY_VECTOR,
                 DataType.FLOAT_VECTOR,
@@ -330,14 +328,30 @@ class Buffer:
                 for val in v:
                     arr.append(json.dumps(np.frombuffer(val, dtype=dt).tolist()))
                 data[k] = pd.Series(arr, dtype=np.dtype("str"))
+            elif field_schema.dtype in {
+                DataType.JSON,
+                DataType.ARRAY,
+            }:
+                dt = np.dtype("str")
+                arr = []
+                for val in v:
+                    if val is None:
+                        arr.append(nullkey)
+                    else:
+                        arr.append(json.dumps(val))
+                data[k] = pd.Series(arr, dtype=dt)
             elif field_schema.dtype in {DataType.BOOL}:
                 dt = np.dtype("str")
-                arr = ["true" if x else "false" for x in v]
+                for val in v:
+                    if val is None:
+                        arr.append(nullkey)
+                    else:
+                        arr.append(
+                            "true" if val else "false"
+                        )
                 data[k] = pd.Series(arr, dtype=dt)
-            elif field_schema.dtype.name in NUMPY_TYPE_CREATOR:
-                dt = NUMPY_TYPE_CREATOR[field_schema.dtype.name]
-                data[k] = pd.Series(v, dtype=dt)
             else:
+                v = [nullkey if x is None else x for x in v]
                 data[k] = pd.Series(v)
 
         file_path = Path(local_path + ".csv")
